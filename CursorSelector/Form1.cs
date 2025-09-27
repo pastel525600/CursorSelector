@@ -20,9 +20,7 @@ namespace CursorSelector
         const int SPIF_UPDATEINIFILE = 0x01;
         const int SPIF_SENDCHANGE = 0x02;
 
-        private string appDataFolder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "CursorSelector");
+        private string appDataFolder = @"C:\CursorSelector";
         private string cursorFolder = @"C:\Cursors";
         private string[] availableThemes;
         private string[] selectedThemes;
