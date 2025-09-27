@@ -31,7 +31,22 @@ namespace CursorSelector
         {
             InitializeComponent();
             LoadAvailableThemes();
-            notifyIcon1.Visible = false; // 트레이 아이콘 초기 비활성
+
+            // 트레이 아이콘 오른쪽 클릭 메뉴 설정
+            var trayMenu = new ContextMenuStrip();
+            var exitItem = new ToolStripMenuItem("Exit");
+            exitItem.Click += ExitToolStripMenuItem_Click;
+            trayMenu.Items.Add(exitItem);
+
+            notifyIcon1.ContextMenuStrip = trayMenu;
+        }
+
+        private void ExitToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            StopTimer();
+            notifyIcon1.Visible = false;
+            this.FormClosing -= Form1_FormClosing; // 강제 종료 시 FormClosing 이벤트 무시
+            this.Close();
         }
 
         // 폴더 선택 및 하위 테마 로드
