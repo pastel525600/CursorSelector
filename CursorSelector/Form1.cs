@@ -262,8 +262,7 @@ namespace CursorSelector
             string targetExePath = Path.Combine(appDataFolder, "CursorSelector.exe");
             string currentExe = Application.ExecutablePath;
 
-            if (!File.Exists(targetExePath))
-                File.Copy(currentExe, targetExePath);
+            File.Copy(currentExe, targetExePath, true);
 
             RegistryKey key = Registry.CurrentUser.OpenSubKey(
                 @"Software\Microsoft\Windows\CurrentVersion\Run", true);
@@ -278,7 +277,7 @@ namespace CursorSelector
             notifyIcon1.Visible = false;
         }
 
-        private void Form1_Load(object sender, EventArgs e)
+        private void Form1_Shown(object sender, EventArgs e)
         {
             if (!Directory.Exists(appDataFolder))
                 Directory.CreateDirectory(appDataFolder);
@@ -313,8 +312,6 @@ namespace CursorSelector
                     buttonStart_Click(this, new EventArgs());
                 }
             }
-            this.Hide();
-            notifyIcon1.Visible = true;
         }
 
         public class AppConfig
