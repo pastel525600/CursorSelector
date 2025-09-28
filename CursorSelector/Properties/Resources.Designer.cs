@@ -59,15 +59,5 @@ namespace CursorSelector.Properties {
                 resourceCulture = value;
             }
         }
-        
-        /// <summary>
-        ///   System.Byte[] 형식의 지역화된 리소스를 찾습니다.
-        /// </summary>
-        internal static byte[] a {
-            get {
-                object obj = ResourceManager.GetObject("a", resourceCulture);
-                return ((byte[])(obj));
-            }
-        }
     }
 }
