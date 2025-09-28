@@ -4,10 +4,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows.Forms;
-using System.Xml;
 using Timer = System.Threading.Timer;
-
 
 namespace CursorSelector
 {
@@ -21,14 +20,17 @@ namespace CursorSelector
         const int SPIF_SENDCHANGE = 0x02;
 
         private bool autoStart = false;
+        private int currentIndex = 0;
+        private int interval = 1;
         private string appDataFolder = @"C:\CursorSelector";
         private string cursorFolder = @"C:\Cursors";
         private string[] availableThemes;
         private string[] selectedThemes;
-        private int currentIndex = 0;
-        private int interval = 1;
         private Timer timer;
 
+        /// <summary>
+        /// 생성자
+        /// </summary>
         public Form1()
         {
             InitializeComponent();
@@ -46,12 +48,37 @@ namespace CursorSelector
             notifyIcon1.ContextMenuStrip = trayMenu;
         }
 
+        /// <summary>
+        /// 폴더 내의 하위 폴더(테마) 로드
+        /// </summary>
+        private void LoadAvailableThemes()
+        {
+            // 폴더가 없으면 종료
+            if (!Directory.Exists(cursorFolder)) return;
+
+            // 하위 폴더 로드
+            availableThemes = Directory.GetDirectories(cursorFolder);
+            listBoxAvailable.Items.Clear();
+            foreach (var t in availableThemes)
+                listBoxAvailable.Items.Add(Path.GetFileName(t));
+        }
+
+        /// <summary>
+        /// 트레이 아이콘 메뉴 - Open
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void OpenToolStripMenuItem_Click(object sender, EventArgs e)
         {
             this.Show();
             this.WindowState = FormWindowState.Normal;
         }
 
+        /// <summary>
+        /// 트레이 아이콘 메뉴 - Exit
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void ExitToolStripMenuItem_Click(object sender, EventArgs e)
         {
             StopTimer();
@@ -59,7 +86,11 @@ namespace CursorSelector
             this.Close();
         }
 
-        // 폴더 선택 및 하위 테마 로드
+        /// <summary>
+        /// 폴더 선택 버튼으로 커서 테마 폴더 선택
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void buttonSelectFolder_Click(object sender, EventArgs e)
         {
             using (FolderBrowserDialog fbd = new FolderBrowserDialog())
@@ -75,43 +106,28 @@ namespace CursorSelector
             SaveConfig();
         }
 
-        private void LoadAvailableThemes()
+        /// <summary>
+        /// config.txt 저장
+        /// </summary>
+        private void SaveConfig()
         {
-            if (!Directory.Exists(cursorFolder)) return;
-
-            availableThemes = Directory.GetDirectories(cursorFolder);
-            listBoxAvailable.Items.Clear();
-            foreach (var t in availableThemes)
-                listBoxAvailable.Items.Add(Path.GetFileName(t));
+            string configPath = Path.Combine(appDataFolder, "config.txt");
+            var lines = new List<string>
+            {
+                $"CursorFolder={cursorFolder}",
+                $"SelectedThemes={string.Join(",", listBoxSelected.Items.Cast<string>())}",
+                $"IntervalSec={interval}",
+                $"currentIndex={currentIndex}",
+                $"AutoStart={autoStart}"
+            };
+            File.WriteAllLines(configPath, lines);
         }
 
-        // 선택/삭제 → 순서 지정
-        private void buttonAdd_Click(object sender, EventArgs e)
-        {
-            foreach (var item in listBoxAvailable.SelectedItems)
-                listBoxSelected.Items.Add(item);
-
-            SaveConfig();
-        }
-
-        private void buttonRemove_Click(object sender, EventArgs e)
-        {
-            // 선택된 인덱스를 복사
-            int[] indices = new int[listBoxSelected.SelectedIndices.Count];
-            listBoxSelected.SelectedIndices.CopyTo(indices, 0);
-
-            // 내림차순으로 제거
-            Array.Sort(indices);
-            Array.Reverse(indices);
-
-            foreach (int idx in indices)
-                listBoxSelected.Items.RemoveAt(idx);
-
-            SaveConfig();
-        }
-
-
-        // Apply Now
+        /// <summary>
+        /// 선택된 테마 즉시 적용
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void buttonApplyNow_Click(object sender, EventArgs e)
         {
             // 정확히 하나만 선택된 경우만 실행
@@ -128,25 +144,132 @@ namespace CursorSelector
             }
         }
 
-        // Start 버튼 → 타이머 반복
+        /// <summary>
+        /// 선택된 테마 추가
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void buttonAdd_Click(object sender, EventArgs e)
+        {
+            foreach (var item in listBoxAvailable.SelectedItems)
+                listBoxSelected.Items.Add(item);
+
+            SaveConfig();
+        }
+
+        /// <summary>
+        /// 선택된 테마 제거
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void buttonRemove_Click(object sender, EventArgs e)
+        {
+            // 선택된 인덱스를 복사
+            int[] indices = new int[listBoxSelected.SelectedIndices.Count];
+            listBoxSelected.SelectedIndices.CopyTo(indices, 0);
+
+            // 내림차순으로 제거
+            Array.Sort(indices);
+            Array.Reverse(indices);
+
+            foreach (int idx in indices)
+                listBoxSelected.Items.RemoveAt(idx);
+
+            SaveConfig();
+        }
+
+        /// <summary>
+        /// 테마 변경 주기 설정
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void numericUpDownInterval_ValueChanged(object sender, EventArgs e)
+        {
+            interval = (int)numericUpDownInterval.Value;
+            SaveConfig();
+        }
+
+        /// <summary>
+        /// 테마 순서 위로 이동
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void buttonUp_Click(object sender, EventArgs e)
+        {
+            // 정확히 하나만 선택된 경우만 실행
+            if (listBoxSelected.SelectedItems.Count != 1)
+            {
+                MessageBox.Show("이동할 테마를 하나만 선택하세요.",
+                                "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            int idx = listBoxSelected.SelectedIndex;
+            if (idx > 0)
+            {
+                var item = listBoxSelected.Items[idx];
+                listBoxSelected.Items.RemoveAt(idx);
+                listBoxSelected.Items.Insert(idx - 1, item);
+                listBoxSelected.SelectedIndex = idx - 1;
+                SaveConfig();
+            }
+        }
+
+        /// <summary>
+        /// 테마 순서 아래로 이동
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void buttonDown_Click(object sender, EventArgs e)
+        {
+            // 정확히 하나만 선택된 경우만 실행
+            if (listBoxSelected.SelectedItems.Count != 1)
+            {
+                MessageBox.Show("이동할 테마를 하나만 선택하세요.",
+                                "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            int idx = listBoxSelected.SelectedIndex;
+            if (idx < listBoxSelected.Items.Count - 1 && idx >= 0)
+            {
+                var item = listBoxSelected.Items[idx];
+                listBoxSelected.Items.RemoveAt(idx);
+                listBoxSelected.Items.Insert(idx + 1, item);
+                listBoxSelected.SelectedIndex = idx + 1;
+                SaveConfig();
+            }
+        }
+
+        /// <summary>
+        /// 시작 버튼으로 반복 시작
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void buttonStart_Click(object sender, EventArgs e)
         {
             StopTimer();
 
+            // 선택된 테마 목록 복사
             selectedThemes = new string[listBoxSelected.Items.Count];
             listBoxSelected.Items.CopyTo(selectedThemes, 0);
+
+            // 선택된 테마가 없으면 종료
             if (selectedThemes.Length == 0) return;
-            if(listBoxSelected.SelectedIndex >= 0 && listBoxSelected.SelectedIndex < listBoxSelected.Items.Count)
+
+            // 최신 인덱스가 있으면 유지
+            if (listBoxSelected.SelectedIndex >= 0 && listBoxSelected.SelectedIndex < listBoxSelected.Items.Count)
             {
                 currentIndex = listBoxSelected.SelectedIndex;
             }
 
+            // UI 비활성화
             listBoxAvailable.SelectedItems.Clear();
             listBoxSelected.SelectedItems.Clear();
             buttonSelectFolder.Enabled = false;
             listBoxAvailable.Enabled = false;
             listBoxSelected.Enabled = false;
-            buttonApplyNow.Enabled = false; 
+            buttonApplyNow.Enabled = false;
             buttonAdd.Enabled = false;
             buttonRemove.Enabled = false;
             numericUpDownInterval.Enabled = false;
@@ -155,18 +278,17 @@ namespace CursorSelector
             buttonUp.Enabled = false;
             buttonDown.Enabled = false;
 
-            int interval = (int)numericUpDownInterval.Value * 1000;
-
+            // 타이머 시작
             timer = new Timer(_ =>
             {
                 try
                 {
-                    if (selectedThemes.Length == 0) return;
-
+                    // 현재 인덱스의 테마 적용
                     string themeName = selectedThemes[currentIndex];
                     string themePath = Path.Combine(cursorFolder, themeName);
                     ApplyCursor(themePath);
 
+                    // UI 스레드에서 선택된 항목 표시
                     this.BeginInvoke((MethodInvoker)delegate
                     {
                         SaveConfig();
@@ -177,67 +299,47 @@ namespace CursorSelector
                             listBoxSelected.SelectedIndex = idx;
                     });
 
+                    // 다음 인덱스로 이동 (순환)
                     currentIndex = (currentIndex + 1) % selectedThemes.Length;
                 }
                 catch (Exception ex)
                 {
-                    // 로그 처리
+                    // 오류 시 타이머 중지 및 UI 복원
+                    this.BeginInvoke((MethodInvoker)delegate
+                    {
+                        StopTimer();
+                        buttonSelectFolder.Enabled = true;
+                        listBoxAvailable.Enabled = true;
+                        listBoxSelected.Enabled = true;
+                        buttonApplyNow.Enabled = true;
+                        buttonAdd.Enabled = true;
+                        buttonRemove.Enabled = true;
+                        numericUpDownInterval.Enabled = true;
+                        buttonStart.Enabled = true;
+                        buttonStop.Enabled = false;
+                        buttonUp.Enabled = true;
+                        buttonDown.Enabled = true;
+                        MessageBox.Show("오류가 발생하여 중지합니다.\n" + ex.Message,
+                                        "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    });
                 }
-            }, null, 0, interval);
+            }, null, 0, interval * 1000);
 
+            // Windows 시작 시 자동 실행 등록
             StartWithWindows();
 
+            // 자동 시작 설정 저장
             autoStart = true;
             SaveConfig();
         }
 
-        private void SaveConfig()
-        {
-            string configPath = Path.Combine(appDataFolder, "config.txt");
-            var lines = new List<string>
-            {
-                $"CursorFolder={cursorFolder}",
-                $"SelectedThemes={string.Join(",", listBoxSelected.Items.Cast<string>())}",
-                $"IntervalSec={interval}",
-                $"currentIndex={currentIndex}",
-                $"AutoStart={autoStart}"
-            };
-            File.WriteAllLines(configPath, lines);
-        }
-
-        // Stop 버튼 → 반복 종료
-        private void buttonStop_Click(object sender, EventArgs e)
-        {
-            StopTimer();
-
-            autoStart = false;
-            SaveConfig();
-
-            buttonSelectFolder.Enabled = true;
-            listBoxAvailable.Enabled = true;
-            listBoxSelected.Enabled = true;
-            buttonApplyNow.Enabled = true;
-            buttonAdd.Enabled = true;
-            buttonRemove.Enabled = true;
-            numericUpDownInterval.Enabled = true;
-            buttonStart.Enabled = true;
-            buttonStop.Enabled = false;
-            buttonUp.Enabled = true;
-            buttonDown.Enabled = true;
-        }
-
-        private void StopTimer()
-        {
-            if (timer != null)
-            {
-                timer.Dispose();
-                timer = null;
-            }
-        }
-
-        // 커서 적용
+        /// <summary>
+        /// 테마 폴더의 커서 파일을 레지스트리에 적용하고 시스템에 반영
+        /// </summary>
+        /// <param name="themeFolder"></param>
         private void ApplyCursor(string themeFolder)
         {
+            // 파일 매핑
             var cursorMap = new (string key, string file)[]
             {
                 ( "Arrow", "Normal Select.ani" ),
@@ -274,38 +376,125 @@ namespace CursorSelector
             SystemParametersInfo(SPI_SETCURSORS, 0, null, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
         }
 
-        // 폼 닫기 → 트레이로 최소화
+        /// <summary>
+        /// Windows 시작 시 자동 실행 등록
+        /// </summary>
+        private void StartWithWindows()
+        {
+            try
+            {
+                // 프로그램을 앱용 폴더로 복사
+                string targetExePath = Path.Combine(appDataFolder, "CursorSelector.exe");
+                string currentExe = Application.ExecutablePath;
+
+                File.Copy(currentExe, targetExePath, true);
+
+                // 자동 실행 레지스트리 설정
+                RegistryKey key = Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Run", true);
+
+                key.SetValue("CursorSelector", targetExePath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("권한 문제로 자동 실행 설정에 실패했습니다.\n" + ex.Message,
+                                "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 정지 버튼으로 반복 중지
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void buttonStop_Click(object sender, EventArgs e)
+        {
+            // 반복 타이머 중지
+            StopTimer();
+
+            // Windows 시작 시 자동 실행 해제
+            try
+            {
+                // Windows 시작 시 자동 실행 레지스트리 해제
+                string targetExePath = Path.Combine(appDataFolder, "CursorSelector.exe");
+
+                RegistryKey key = Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Run", true);
+
+                key.SetValue("CursorSelector", targetExePath);
+
+                // 자동 시작 해제 설정 저장
+                autoStart = false;
+                SaveConfig();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("권한 문제로 자동 실행 해제에 실패했습니다.\n" + ex.Message,
+                                "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+
+            // UI 복원
+            buttonSelectFolder.Enabled = true;
+            listBoxAvailable.Enabled = true;
+            listBoxSelected.Enabled = true;
+            buttonApplyNow.Enabled = true;
+            buttonAdd.Enabled = true;
+            buttonRemove.Enabled = true;
+            numericUpDownInterval.Enabled = true;
+            buttonStart.Enabled = true;
+            buttonStop.Enabled = false;
+            buttonUp.Enabled = true;
+            buttonDown.Enabled = true;
+        }
+
+        /// <summary>
+        /// 반복 타이머 중지
+        /// </summary>
+        private void StopTimer()
+        {
+            if (timer != null)
+            {
+                timer.Change(Timeout.Infinite, Timeout.Infinite);
+
+                timer.Dispose();
+                timer = null;
+            }
+        }
+
+        /// <summary>
+        /// 폼 닫기 시 트레이로 최소화
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
             e.Cancel = true;
             this.Hide();
         }
 
-        // Windows 시작 시 자동 실행 등록
-        private void StartWithWindows()
-        {
-            string targetExePath = Path.Combine(appDataFolder, "CursorSelector.exe");
-            string currentExe = Application.ExecutablePath;
-
-            File.Copy(currentExe, targetExePath, true);
-
-            RegistryKey key = Registry.CurrentUser.OpenSubKey(
-                @"Software\Microsoft\Windows\CurrentVersion\Run", true);
-
-            key.SetValue("CursorSelector", targetExePath);
-        }
-
+        /// <summary>
+        /// 아이콘 더블 클릭 시 폼 복원
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void notifyIcon1_MouseDoubleClick(object sender, MouseEventArgs e)
         {
             this.Show();
             this.WindowState = FormWindowState.Normal;
         }
 
+        /// <summary>
+        /// 프로그램 시작 시 config.txt 로드 후 자동 시작
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void Form1_Shown(object sender, EventArgs e)
         {
+            // 프로그램용 폴더 생성
             if (!Directory.Exists(appDataFolder))
                 Directory.CreateDirectory(appDataFolder);
 
+            // config.txt 로드
             string configPath = Path.Combine(appDataFolder, "config.txt");
             if (File.Exists(configPath))
             {
@@ -318,19 +507,16 @@ namespace CursorSelector
                 cursorFolder = config.ContainsKey("CursorFolder") ? config["CursorFolder"] : "";
                 tbxFolder.Text = cursorFolder;
                 LoadAvailableThemes();
-
                 if (config.ContainsKey("SelectedThemes"))
                 {
-                    // SelectedThemes는 ','로 구분
                     var themes = config["SelectedThemes"].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
                     listBoxSelected.Items.AddRange(themes);
                 }
-
-                if (config.ContainsKey("IntervalSec") && int.TryParse(config["IntervalSec"], out int interval))
+                if (config.ContainsKey("IntervalSec") && int.TryParse(config["IntervalSec"], out int intval))
                 {
-                    numericUpDownInterval.Value = interval;
+                    interval = intval;
+                    numericUpDownInterval.Value = intval;
                 }
-
                 if (config.ContainsKey("currentIndex") && int.TryParse(config["currentIndex"], out int currentIdx))
                 {
                     if (currentIdx >= 0 && currentIdx < listBoxSelected.Items.Count)
@@ -338,7 +524,6 @@ namespace CursorSelector
                         currentIndex = currentIdx;
                     }
                 }
-
                 if (config.ContainsKey("AutoStart") && bool.TryParse(config["AutoStart"], out bool autoStart) && autoStart)
                 {
                     // 바로 타이머 시작 & 트레이로
@@ -348,64 +533,14 @@ namespace CursorSelector
             }
         }
 
-        private void numericUpDownInterval_ValueChanged(object sender, EventArgs e)
-        {
-            interval = (int)numericUpDownInterval.Value;
-            SaveConfig();
-        }
-
-        // 위로 이동
-        private void buttonUp_Click(object sender, EventArgs e)
-        {
-            if (listBoxSelected.SelectedItems.Count != 1)
-            {
-                MessageBox.Show("이동할 테마를 하나만 선택하세요.",
-                                "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-            int idx = listBoxSelected.SelectedIndex;
-            if (idx > 0)
-            {
-                var item = listBoxSelected.Items[idx];
-                listBoxSelected.Items.RemoveAt(idx);
-                listBoxSelected.Items.Insert(idx - 1, item);
-                listBoxSelected.SelectedIndex = idx - 1;
-                SaveConfig();
-            }
-        }
-
-        // 아래로 이동
-        private void buttonDown_Click(object sender, EventArgs e)
-        {
-            if (listBoxSelected.SelectedItems.Count != 1)
-            {
-                MessageBox.Show("이동할 테마를 하나만 선택하세요.",
-                                "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-            int idx = listBoxSelected.SelectedIndex;
-            if (idx < listBoxSelected.Items.Count - 1 && idx >= 0)
-            {
-                var item = listBoxSelected.Items[idx];
-                listBoxSelected.Items.RemoveAt(idx);
-                listBoxSelected.Items.Insert(idx + 1, item);
-                listBoxSelected.SelectedIndex = idx + 1;
-                SaveConfig();
-            }
-        }
-
-        public class AppConfig
-        {
-            public string CursorFolder { get; set; }
-            public string[] SelectedThemes { get; set; }
-            public int IntervalSec { get; set; }
-            public int LastIndex { get; set; }
-            public bool AutoStart { get; set; }
-        }
-
+        /// <summary>
+        /// Delete 키로 선택된 테마 제거
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void listBoxSelected_KeyDown(object sender, KeyEventArgs e)
         {
-            switch (e.KeyCode) 
+            switch (e.KeyCode)
             {
                 case Keys.Delete:
                     buttonRemove_Click(this, new EventArgs());
@@ -413,6 +548,11 @@ namespace CursorSelector
             }
         }
 
+        /// <summary>
+        /// Enter 키로 선택된 테마 추가
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void listBoxAvailable_KeyDown(object sender, KeyEventArgs e)
         {
             switch (e.KeyCode)
@@ -421,6 +561,18 @@ namespace CursorSelector
                     buttonAdd_Click(this, new EventArgs());
                     break;
             }
-         }
+        }
+
+        /// <summary>
+        /// config.txt 구조체
+        /// </summary>
+        public class AppConfig
+        {
+            public string CursorFolder { get; set; }
+            public string[] SelectedThemes { get; set; }
+            public int IntervalSec { get; set; }
+            public int LastIndex { get; set; }
+            public bool AutoStart { get; set; }
+        }
     }
 }
