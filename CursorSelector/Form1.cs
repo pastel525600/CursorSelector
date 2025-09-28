@@ -381,14 +381,20 @@ namespace CursorSelector
         /// </summary>
         private void StartWithWindows()
         {
+            // 현재 실행 중인 경로와 복사 대상이 다를 때만 복사
+            string targetExePath = Path.Combine(appDataFolder, "CursorSelector.exe");
+            string currentExe = Application.ExecutablePath;
+
+            if (!string.Equals(
+                    Path.GetFullPath(currentExe),
+                    Path.GetFullPath(targetExePath),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                File.Copy(currentExe, targetExePath, true);
+            }
+
             try
             {
-                // 프로그램을 앱용 폴더로 복사
-                string targetExePath = Path.Combine(appDataFolder, "CursorSelector.exe");
-                string currentExe = Application.ExecutablePath;
-
-                File.Copy(currentExe, targetExePath, true);
-
                 // 자동 실행 레지스트리 설정
                 RegistryKey key = Registry.CurrentUser.OpenSubKey(
                     @"Software\Microsoft\Windows\CurrentVersion\Run", true);
